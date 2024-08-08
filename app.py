@@ -6,6 +6,7 @@ from PIL import Image, ExifTags
 import pytesseract
 import os
 from dotenv import load_dotenv
+import pdfplumber
 
 # Load environment variables from .env file
 load_dotenv()
@@ -158,3 +159,73 @@ if uploaded_files:
                 file_name=text_file_name,
                 mime="text/plain"
             )
+         
+                         #plumber image  part 
+def ocr_with_best_orientation(image):
+    best_text = ""
+    best_confidence = -1
+    
+    # Try OCR with different orientations
+    for angle in [0, 90, 180, 270]:
+        rotated_image = image.rotate(angle, expand=True)
+        ocr_result = pytesseract.image_to_data(rotated_image, output_type=pytesseract.Output.DICT)
+        
+        # Calculate confidence
+        confidence = sum(int(conf) for conf in ocr_result['conf'] if conf != '-1') / len(ocr_result['conf'])
+        text = " ".join(ocr_result['text']).strip()
+        
+        if confidence > best_confidence:
+            best_confidence = confidence
+            best_text = text
+    
+    return best_text
+
+def format_extracted_text(text):
+    # Clean and format the extracted text
+    paragraphs = text.split("\n")
+    formatted_text = "\n\n\n".join(paragraph.strip() for paragraph in paragraphs if paragraph.strip())
+    return formatted_text
+
+def extract_text_from_images_in_pdf(pdf_file):
+    text = ""
+    with pdfplumber.open(pdf_file) as pdf:
+        for page in pdf.pages:
+            # Extract images
+            for image in page.images:
+                # Get the image data
+                x0, y0, x1, y1 = image["x0"], image["y0"], image["x1"], image["y1"]
+                
+                # Adjust bounding box to ensure it's within the page bounds
+                x0 = max(x0, 0)
+                y0 = max(y0, 0)
+                x1 = min(x1, page.width)
+                y1 = min(y1, page.height)
+
+                # Crop the page image to get the image area
+                img = page.within_bbox((x0, y0, x1, y1)).to_image()
+
+                # Convert to PIL Image
+                pil_image = img.original  # This is already a PIL Image
+
+                # Perform OCR with the best orientation
+                extracted_text = ocr_with_best_orientation(pil_image)
+                text += extracted_text + "\n\n\n"  # Add triple line breaks between blocks of text
+
+    return format_extracted_text(text)
+
+pdf_file = st.file_uploader("Upload a PDF file", type=["pdf"])
+if pdf_file is not None:
+    with st.spinner("Extracting text..."):
+        extracted_text = extract_text_from_images_in_pdf(pdf_file)
+        st.success("Text extraction complete!")
+
+        # Display extracted text
+        st.text_area("Extracted Text", extracted_text, height=300)
+
+        # Create a download button for the extracted text
+        st.download_button(
+            label="Download Extracted Text",
+            data=extracted_text,
+            file_name="extracted_text.txt",
+            mime="text/plain"
+        )
