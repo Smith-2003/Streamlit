@@ -11,8 +11,6 @@ import pdfplumber
 # Load environment variables from .env file
 load_dotenv()
 
-
-
 st.set_page_config(page_title="PDF Text Extractor", page_icon="📄", layout="wide")
 
 st.title("PDF Text Extractor with OCR")
@@ -213,7 +211,7 @@ def extract_text_from_images_in_pdf(pdf_file):
 
     return format_extracted_text(text)
 
-pdf_file = st.file_uploader("Upload a PDF file", type=["pdf"])
+pdf_file = st.file_uploader("Upload a PDF file consisting of images", type=["pdf"])
 if pdf_file is not None:
     with st.spinner("Extracting text..."):
         extracted_text = extract_text_from_images_in_pdf(pdf_file)
